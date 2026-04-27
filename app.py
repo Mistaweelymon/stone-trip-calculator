@@ -4,6 +4,17 @@ import googlemaps
 # 1. --- CONFIGURATION ---
 SHOP_ADDRESS = "8828 Midway West Rd, Raleigh NC 27617"
 
+# Pricing config: keyed by state abbreviation.
+# base: flat base charge, per_mile: rate beyond threshold miles, threshold: miles before per_mile kicks in
+RATES = {
+    "GA": {"base": 15000, "per_mile": 15.00, "threshold": 400, "tier": "Deep Long-Haul Project Rate"},
+    "KY": {"base": 15000, "per_mile": 15.00, "threshold": 400, "tier": "Deep Long-Haul Project Rate"},
+    "MD": {"base": 2500,  "per_mile": 7.50,  "threshold": 250, "tier": "Mid-Atlantic Logistics Rate"},
+    "TN": {"base": 2500,  "per_mile": 7.50,  "threshold": 250, "tier": "Mid-Atlantic Logistics Rate"},
+    "VA": {"base": 1500,  "per_mile": 5.00,  "threshold": 150, "tier": "Border State Standard Rate"},
+    "SC": {"base": 1500,  "per_mile": 5.00,  "threshold": 150, "tier": "Border State Standard Rate"},
+}
+
 # 2. --- PAGE CONFIG & THEME-PROOF STYLING ---
 st.set_page_config(page_title="Stone Logistics Pro", page_icon="🚚", layout="centered")
 
@@ -24,52 +35,94 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 3. --- API INITIALIZATION ---
+gmaps = None
 try:
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_KEY"])
 except Exception as e:
     st.error(f"Secret Key Error: {e}")
+    st.stop()  # Halt app cleanly — no point continuing without a valid client
 
 # 4. --- LOGIC FUNCTIONS ---
+@st.cache_data(ttl=3600)  # Cache results for 1 hour to avoid redundant API calls
 def get_distance_and_state(destination):
+    """
+    Returns (miles, state_abbreviation) for a given destination address.
+    Uses a single geocode call to get coordinates, then a distance matrix call.
+    State abbreviation (short_name) is extracted from the geocode result.
+    """
     try:
-        # Step A: Get Miles
-        dist_res = gmaps.distance_matrix(SHOP_ADDRESS, destination, mode='driving', units='imperial')
-        if dist_res['status'] != 'OK':
-            st.error(f"Google Error: {dist_res['status']}")
-            return None, None
-            
-        element = dist_res['rows'][0]['elements'][0]
-        if element['status'] != 'OK':
-            st.error(f"Route Error: {element['status']} (Check if address exists)")
-            return None, None
-            
-        miles = element['distance']['value'] * 0.000621371
-        
-        # Step B: Get State
+        # Step A: Geocode destination once — get coords + state abbreviation
         geo_res = gmaps.geocode(destination)
-        state_name = "Unknown"
-        if geo_res:
-            for comp in geo_res[0]['address_components']:
-                if 'administrative_area_level_1' in comp['types']:
-                    state_name = comp['long_name']
-        
-        return round(miles, 2), state_name
+        if not geo_res:
+            st.error("Address not found. Please check and try again.")
+            return None, None
+
+        state_abbr = None
+        for comp in geo_res[0]["address_components"]:
+            if "administrative_area_level_1" in comp["types"]:
+                state_abbr = comp["short_name"].upper()  # e.g. "NC", "VA"
+                break
+
+        if not state_abbr:
+            st.error("Could not determine state from address.")
+            return None, None
+
+        # Step B: Get driving distance using geocoded coordinates (avoids second address ambiguity)
+        coords = geo_res[0]["geometry"]["location"]
+        destination_latlng = (coords["lat"], coords["lng"])
+
+        dist_res = gmaps.distance_matrix(
+            SHOP_ADDRESS,
+            destination_latlng,
+            mode="driving",
+            units="imperial"
+        )
+
+        if dist_res["status"] != "OK":
+            st.error(f"Google Maps error: {dist_res['status']}")
+            return None, None
+
+        element = dist_res["rows"][0]["elements"][0]
+        if element["status"] != "OK":
+            st.error(f"Route error: {element['status']} — check that the address is reachable by road.")
+            return None, None
+
+        miles = element["distance"]["value"] * 0.000621371
+        return round(miles, 2), state_abbr
+
     except Exception as e:
-        st.error(f"Connection Error: {e}")
+        st.error(f"Connection error: {e}")
         return None, None
 
-def calculate_trip_charge(miles, state):
-    s = state.upper()
-    if any(x in s for x in ["GEORGIA", "KENTUCKY", "GA", "KY"]):
-        return 15000 + (max(0, miles - 400) * 15.00), "Deep Long-Haul Project Rate"
-    elif any(x in s for x in ["MARYLAND", "TENNESSEE", "MD", "TN"]):
-        return 2500 + (max(0, miles - 250) * 7.50), "Mid-Atlantic Logistics Rate"
-    elif any(x in s for x in ["VIRGINIA", "SOUTH CAROLINA", "VA", "SC"]):
-        return 1500 + (max(0, miles - 150) * 5.00), "Border State Standard Rate"
-    elif "NORTH CAROLINA" in s or "NC" in s:
-        if miles > 110: return 1200.00, "NC Coastal/Mountain Rate (Wilmington Tier)"
-        return 600.00 if miles > 75 else 0.00, "NC Standard Trip Charge"
-    return 1000 + (miles * 5.00), "Standard Out-of-State Baseline"
+
+def calculate_trip_charge(miles, state_abbr):
+    """
+    Returns (charge, tier_label) based on miles and 2-letter state abbreviation.
+    NC is handled separately with distance-based tiers.
+    All other states use the RATES config dict, falling back to a baseline rate.
+    Local jobs (short NC runs) are not expected here — handled upstream.
+    """
+    s = state_abbr.upper()
+
+    # North Carolina — distance-based tiers
+    if s == "NC":
+        if miles > 110:
+            return 1200.00, "NC Coastal/Mountain Rate (Wilmington Tier)"
+        elif miles > 75:
+            return 600.00, "NC Standard Trip Charge"
+        else:
+            # Local NC jobs not expected in this flow — handled upstream
+            return 0.00, "NC Local (No Charge)"
+
+    # States with configured rates
+    if s in RATES:
+        r = RATES[s]
+        charge = r["base"] + (max(0, miles - r["threshold"]) * r["per_mile"])
+        return round(charge, 2), r["tier"]
+
+    # Default fallback for unconfigured states
+    return round(1000 + (miles * 5.00), 2), "Standard Out-of-State Baseline"
+
 
 # 5. --- UI LAYOUT ---
 st.markdown("""
@@ -84,14 +137,27 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-address_input = st.text_input("Destination Address", placeholder="e.g. Norfolk, VA")
+# Gate API calls behind a form — prevents firing on every keystroke
+with st.form("quote_form"):
+    address_input = st.text_input("Destination Address", placeholder="e.g. Norfolk, VA")
+    submitted = st.form_submit_button("Get Quote")
 
-if address_input:
-    miles, state = get_distance_and_state(address_input)
+if submitted and address_input:
+    with st.spinner("Calculating route..."):
+        miles, state_abbr = get_distance_and_state(address_input)
     if miles is not None:
-        charge, tier = calculate_trip_charge(miles, state)
-        st.markdown(f'<div class="quote-card"><p>Suggested Trip Charge</p><h1>${charge:,.2f}</h1><div class="tier-badge">🛡️ {tier}</div></div>', unsafe_allow_html=True)
+        charge, tier = calculate_trip_charge(miles, state_abbr)
+        st.markdown(
+            f'<div class="quote-card">'
+            f'<p>Suggested Trip Charge</p>'
+            f'<h1>${charge:,.2f}</h1>'
+            f'<div class="tier-badge">🛡️ {tier}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
         c1, c2, c3 = st.columns(3)
         c1.metric("One-Way", f"{miles} mi")
-        c2.metric("State", state)
-        c3.metric("Round Trip", f"{round(miles*2, 1)} mi")
+        c2.metric("State", state_abbr)
+        c3.metric("Round Trip", f"{round(miles * 2, 1)} mi")
+elif submitted and not address_input:
+    st.warning("Please enter a destination address.")
