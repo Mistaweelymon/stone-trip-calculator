@@ -4,14 +4,13 @@ import googlemaps
 # 1. --- CONFIGURATION ---
 SHOP_ADDRESS = "8828 Midway West Rd, Raleigh NC 27617"
 
-# 2. --- PAGE CONFIG & ADVANCED UI STYLING ---
+# 2. --- PAGE CONFIG & THEME-PROOF STYLING ---
 st.set_page_config(
     page_title="Stone Logistics Pro",
     page_icon="🚚",
     layout="centered"
 )
 
-# Deep integration of your Tailwind-inspired design
 st.markdown("""
     <style>
     /* Main Background */
@@ -30,16 +29,30 @@ st.markdown("""
         margin-bottom: -1rem;
     }
 
+    /* FIX: Input Text Visibility */
+    /* This ensures the text you type is DARK and the background is WHITE */
+    .stTextInput input {
+        color: #1E293B !important; 
+        background-color: #FFFFFF !important;
+        border-radius: 0.75rem !important;
+        padding: 0.75rem !important;
+        border: 2px solid #E2E8F0 !important;
+    }
+    
+    /* Highlight the box when you click it */
+    .stTextInput input:focus {
+        border-color: #6366F1 !important;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+    }
+
     /* Primary Quote Card (Gradient) */
     .quote-card {
         background: linear-gradient(135deg, #4F46E5 0%, #4338CA 50%, #1E293B 100%) !important;
         padding: 3rem 2rem;
         border-radius: 2rem;
         text-align: center;
-        box-shadow: 0 20px 25px -5px rgba(49, 46, 129, 0.1), 0 10px 10px -5px rgba(49, 46, 129, 0.04);
+        box-shadow: 0 20px 25px -5px rgba(49, 46, 129, 0.1);
         margin: 2rem 0;
-        position: relative;
-        overflow: hidden;
     }
 
     .quote-card h1 {
@@ -47,25 +60,21 @@ st.markdown("""
         font-size: 4.5rem !important;
         font-weight: 800 !important;
         margin: 0.5rem 0 !important;
-        letter-spacing: -0.05em;
     }
 
-    .quote-card p.label {
+    .quote-card p {
         color: #C7D2FE !important;
         text-transform: uppercase;
         letter-spacing: 0.1em;
         font-weight: 600;
-        font-size: 0.85rem;
     }
 
     .tier-badge {
         background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(4px);
         border: 1px solid rgba(255, 255, 255, 0.2);
         padding: 0.5rem 1rem;
         border-radius: 9999px;
         color: white !important;
-        font-size: 0.85rem;
         display: inline-block;
         margin-top: 1rem;
     }
@@ -74,38 +83,17 @@ st.markdown("""
     div[data-testid="metric-container"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
-        padding: 1.5rem !important;
+        padding: 1.25rem !important;
         border-radius: 1.25rem !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
     }
 
     [data-testid="stMetricValue"] {
         color: #1E293B !important;
         font-weight: 700 !important;
-        font-size: 1.75rem !important;
     }
 
     [data-testid="stMetricLabel"] {
         color: #64748B !important;
-        font-weight: 600 !important;
-        text-transform: uppercase;
-        font-size: 0.75rem !important;
-        letter-spacing: 0.05em;
-    }
-
-    /* Input Field Customization */
-    .stTextInput input {
-        border-radius: 1rem !important;
-        padding: 1rem !important;
-        border: 2px solid #E2E8F0 !important;
-        background-color: #FFFFFF !important;
-        font-size: 1.1rem !important;
-    }
-    
-    .stTextInput label {
-        color: #475569 !important;
-        font-weight: 600 !important;
-        margin-left: 0.25rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -137,39 +125,35 @@ def get_distance_and_state(destination):
 
 def calculate_trip_charge(miles, state_name):
     if not state_name: return 0.00, "Unknown State"
-    state_upper = state_name.upper()
-    
-    if any(x in state_upper for x in ["GEORGIA", "KENTUCKY", "GA", "KY"]):
+    s = state_name.upper()
+    if any(x in s for x in ["GEORGIA", "KENTUCKY", "GA", "KY"]):
         return 15000 + (max(0, miles - 400) * 15.00), "Deep Long-Haul Project Rate"
-    elif any(x in state_upper for x in ["MARYLAND", "TENNESSEE", "MD", "TN"]):
+    elif any(x in s for x in ["MARYLAND", "TENNESSEE", "MD", "TN"]):
         return 2500 + (max(0, miles - 250) * 7.50), "Mid-Atlantic Logistics Rate"
-    elif any(x in state_upper for x in ["VIRGINIA", "SOUTH CAROLINA", "VA", "SC"]):
+    elif any(x in s for x in ["VIRGINIA", "SOUTH CAROLINA", "VA", "SC"]):
         return 1500 + (max(0, miles - 150) * 5.00), "Border State Standard Rate"
-    elif "NORTH CAROLINA" in state_upper or "NC" in state_upper:
+    elif "NORTH CAROLINA" in s or "NC" in s:
         if miles > 110: return 1200.00, "NC Coastal/Mountain Rate (Wilmington Tier)"
         if miles > 75: return 600.00, "NC Standard Trip Charge"
-        return 0.00, "Local Delivery (Free Zone)"
+        return 0.00, "Local Delivery"
     return 1000 + (miles * 5.00), "Standard Out-of-State Baseline"
 
 # 5. --- UI LAYOUT ---
-
-# Custom Header HTML
 st.markdown("""
     <div class="app-header">
-        <div style="background: #6366F1; padding: 10px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+        <div style="background: #6366F1; padding: 10px; border-radius: 12px; display: flex;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3m15 0h2v-3.34a2 2 0 0 0-.73-1.5l-2.47-1.96a2 2 0 0 0-1.25-.45H14m-4 7.26V5"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
         </div>
-        <div>
+        <div style="margin-left: 15px;">
             <h2 style="color: white; margin: 0; font-size: 1.5rem; font-weight: 700;">Stone Logistics</h2>
-            <p style="color: #94A3B8; margin: 0; font-size: 0.85rem; font-weight: 500;">Automated Quote System</p>
+            <p style="color: #94A3B8; margin: 0; font-size: 0.85rem;">Automated Quote System</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-# Main Content Container
 with st.container():
     st.write("") # Spacer
-    address_input = st.text_input("Destination Address", placeholder="Enter city, state, or zip code...")
+    address_input = st.text_input("Destination Address", placeholder="e.g. Wilmington, NC")
 
     if address_input:
         with st.spinner("Analyzing routes..."):
@@ -177,28 +161,20 @@ with st.container():
         
         if miles is not None:
             charge, tier = calculate_trip_charge(miles, state)
-            
-            # Integrated Quote Card
             st.markdown(f"""
                 <div class="quote-card">
-                    <p class="label">Suggested Trip Charge</p>
+                    <p>Suggested Trip Charge</p>
                     <h1>${charge:,.2f}</h1>
-                    <div class="tier-badge">
-                        🛡️ {tier}
-                    </div>
+                    <div class="tier-badge">🛡️ {tier}</div>
                 </div>
             """, unsafe_allow_html=True)
             
-            # Bottom Grid
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("One-Way", f"{miles} mi")
-            with col2:
-                st.metric("State", state if state else "N/A")
-            with col3:
-                st.metric("Round Trip", f"{round(miles*2, 1)} mi")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("One-Way", f"{miles} mi")
+            c2.metric("State", state if state else "N/A")
+            c3.metric("Round Trip", f"{round(miles*2, 1)} mi")
         else:
-            st.error("Address not found. Please try adding a zip code.")
+            st.error("Address not found.")
     else:
-        st.write("---")
-        st.info("Enter an address above to generate a professional logistics quote.")
+        st.divider()
+        st.info("Enter an address above to generate a quote.")
