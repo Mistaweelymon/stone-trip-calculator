@@ -4,48 +4,63 @@ import googlemaps
 # 1. --- CONFIGURATION ---
 SHOP_ADDRESS = "8828 Midway West Rd, Raleigh NC 27617"
 
-# 2. --- PAGE CONFIG & STYLING ---
+# 2. --- PAGE CONFIG & THEME-PROOF STYLING ---
 st.set_page_config(
     page_title="Stone Quote Pro",
     page_icon="🏗️",
     layout="centered"
 )
 
+# This CSS explicitly sets colors for EVERY element to prevent "invisibility"
 st.markdown("""
     <style>
-    /* Force background color for the whole app */
+    /* 1. Main App Background */
     .stApp {
-        background-color: #f4f7f9;
+        background-color: #f4f7f9 !important;
     }
     
-    /* The Big Navy Hero Card */
+    /* 2. Headers and Labels (Forcing visibility) */
+    h1, h2, h3, p, span, label {
+        color: #1c2833 !important;
+    }
+
+    /* 3. The Big Navy Hero Card */
     .quote-card {
-        background-color: #2e4053;
-        color: #f1c40f !important;
+        background-color: #2e4053 !important;
         padding: 30px;
         border-radius: 15px;
         text-align: center;
         margin-bottom: 25px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
-    
-    /* FIX: Force Metric Text to be Dark/Visible */
-    [data-testid="stMetricValue"] {
-        color: #1c2833 !important;
-        font-weight: 700 !important;
+    .quote-card h1 {
+        color: #f1c40f !important; /* Gold Price */
+        margin: 0 !important;
     }
-    [data-testid="stMetricLabel"] {
-        color: #566573 !important;
-        font-weight: 600 !important;
+    .quote-card p {
+        color: #ffffff !important; /* White text in the navy card */
+        margin: 0 !important;
     }
     
-    /* Metric Card Backgrounds */
+    /* 4. Small Metric Boxes (White Cards) */
     div[data-testid="metric-container"] {
-        background-color: #ffffff;
-        border: 1px solid #d5dbdb;
+        background-color: #ffffff !important;
+        border: 1px solid #d5dbdb !important;
         padding: 15px;
         border-radius: 12px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    [data-testid="stMetricValue"] {
+        color: #2e4053 !important; /* Dark Navy numbers */
+    }
+    [data-testid="stMetricLabel"] {
+        color: #566573 !important; /* Grey labels */
+    }
+    
+    /* 5. Fix for Input Field Labels */
+    .stTextInput label {
+        color: #1c2833 !important;
+        font-weight: bold !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -109,7 +124,7 @@ def calculate_trip_charge(miles, state_name):
 
 # 5. --- USER INTERFACE ---
 st.title("🏗️ Stone Logistics Quote")
-st.subheader("Trip Charge & Distance Calculator")
+st.write("---")
 
 # Destination input
 address_input = st.text_input("📍 Destination Address", placeholder="e.g. Wilmington, NC or 123 Main St...")
@@ -121,12 +136,12 @@ if address_input:
     if miles is not None:
         charge, reason = calculate_trip_charge(miles, state)
         
-        # Result Card
+        # Result Card (Styled via HTML)
         st.markdown(f"""
             <div class="quote-card">
-                <p style="margin:0; font-size: 1.1rem; color: white; opacity: 0.9;">Suggested Trip Charge</p>
-                <h1 style="margin:0; font-size: 3.5rem;">${charge:,.2f}</h1>
-                <p style="margin:0; font-weight: bold; margin-top:10px; color: #abb2b9;">{reason}</p>
+                <p style="font-size: 1.1rem; opacity: 0.9;">Suggested Trip Charge</p>
+                <h1>${charge:,.2f}</h1>
+                <p style="font-weight: bold; margin-top:10px; color: #abb2b9 !important;">{reason}</p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -143,5 +158,4 @@ if address_input:
         st.error("Address not found. Please try adding a zip code.")
 
 else:
-    st.divider()
-    st.info("Enter a destination above to see the breakdown.")
+    st.info("Enter a destination above to see the pricing breakdown.")
