@@ -4,6 +4,37 @@ import googlemaps
 # Configuration
 SHOP_ADDRESS = "8828 Midway West Rd, Raleigh NC 27617"
 
+# --- Page Config ---
+st.set_page_config(
+    page_title="Stone Quote Pro",
+    page_icon="🏗️",
+    layout="centered"
+)
+
+# Custom CSS for a professional "Stone Industry" Look
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f8f9fa;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-left: 5px solid #2e4053;
+    }
+    .quote-card {
+        background-color: #2e4053;
+        color: white;
+        padding: 25px;
+        border-radius: 15px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # Initialize Google Maps Client
 try:
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_KEY"])
@@ -12,76 +43,86 @@ except Exception:
 
 def get_distance_and_state(destination):
     try:
-        # 1. Get Driving Distance
         result = gmaps.distance_matrix(SHOP_ADDRESS, destination, mode='driving', units='imperial')
-        
         if result['status'] == 'OK' and result['rows'][0]['elements'][0]['status'] == 'OK':
             distance_miles = result['rows'][0]['elements'][0]['distance']['value'] * 0.000621371
-            
-            # 2. Get State Name
             geocode_result = gmaps.geocode(destination)
             state_found = ""
             if geocode_result:
                 for component in geocode_result[0]['address_components']:
                     if 'administrative_area_level_1' in component['types']:
-                        # We take the long name (e.g. 'Virginia') to be safe
                         state_found = component['long_name'].upper()
-            
             return round(distance_miles, 2), state_found
-    except Exception as e:
+    except:
         return None, None
     return None, None
 
 def calculate_trip_charge(miles, state_name):
-    if not state_name:
-        return 0.00
+    if not state_name: return 0, "No state detected"
     
-    # --- DEEP LONG HAUL ---
+    # Logic
     if any(x in state_name for x in ["GEORGIA", "KENTUCKY", "GA", "KY"]):
-        return 15000 + (max(0, miles - 400) * 15.00)
-    
-    # --- MID ATLANTIC ---
+        val = 15000 + (max(0, miles - 400) * 15.00)
+        return val, "Deep Long-Haul Project Rate"
     elif any(x in state_name for x in ["MARYLAND", "TENNESSEE", "MD", "TN"]):
-        return 2500 + (max(0, miles - 250) * 7.50)
-    
-    # --- BORDER STATES ---
+        val = 2500 + (max(0, miles - 250) * 7.50)
+        return val, "Mid-Atlantic Logistics Rate"
     elif any(x in state_name for x in ["VIRGINIA", "SOUTH CAROLINA", "VA", "SC"]):
-        return 1500 + (max(0, miles - 150) * 5.00)
-    
-    # --- NORTH CAROLINA (New Tiered Logic) ---
+        val = 1500 + (max(0, miles - 150) * 5.00)
+        return val, "Border State Standard Rate"
     elif "NORTH CAROLINA" in state_name or "NC" in state_name:
-        if miles > 110:
-            return 1200.00  # Wilmington/Asheville Tier
-        elif miles > 75:
-            return 600.00   # Standard Trip Tier
-        else:
-            return 0.00     # Local
-            
-    # --- FALLBACK ---
+        if miles > 110: return 1200.00, "NC Coastal/Mountain Rate (Wilmington Tier)"
+        if miles > 75: return 600.00, "NC Standard Trip Charge"
+        return 0.00, "Local Delivery (Free Zone)"
     else:
-        return 1000 + (miles * 5.00)
+        return 1000 + (miles * 5.00), "Standard Out-of-State Baseline"
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="Stone Trip Quote", page_icon="💎")
+# --- Sidebar Info ---
+with st.sidebar:
+    st.image("https://img.icons8.com/ios-filled/100/2e4053/rock.png", width=80)
+    st.title("Settings")
+    st.info(f"Origin: \n{SHOP_ADDRESS}")
+    st.divider()
+    st.write("v2.0 - Wilmington Update")
 
-st.title("💎 Stone Trip Charge Calculator")
-st.write("Calculates rates based on owner's history from **8828 Midway West Rd**.")
+# --- Main App ---
+st.title("🏗️ Stone Logistics Quote")
+st.subheader("Trip Charge & Distance Calculator")
 
-address_input = st.text_input("Enter Job Address or City/State", placeholder="e.g. Wilmington, NC")
+address_input = st.text_input("📍 Destination Address", placeholder="Enter city, state, or full address...")
 
 if address_input:
-    miles, state = get_distance_and_state(address_input)
+    with st.spinner("Calculating logistics..."):
+        miles, state = get_distance_and_state(address_input)
     
     if miles is not None:
-        charge = calculate_trip_charge(miles, state)
+        charge, reason = calculate_trip_charge(miles, state)
         
+        # Big Hero Result
+        st.markdown(f"""
+            <div class="quote-card">
+                <p style="margin:0; font-size: 1.2rem; opacity: 0.8;">Suggested Trip Charge</p>
+                <h1 style="margin:0; font-size: 3.5rem; color: #f1c40f;">${charge:,.2f}</h1>
+                <p style="margin:0; font-weight: bold; margin-top:10px;">{reason}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Detail Columns
+        col1, col2, col3 = st.columns(3)
+        col1.metric("One-Way Distance", f"{miles} mi")
+        col2.metric("Detected State", state.title() if state else "Unknown")
+        col3.metric("Round Trip", f"{miles*2} mi")
+
+        # Visual Map (Optional but cool)
         st.divider()
-        st.metric(label="Suggested Trip Charge", value=f"${charge:,.2f}")
+        st.caption("Suggested route and logistics overview:")
+        # We can't easily show a full route map without more API calls, 
+        # but Streamlit can show a point on a map if you have lat/long. 
+        # For now, let's keep it clean.
         
-        col1, col2 = st.columns(2)
-        col1.write(f"**Distance:** {miles} miles")
-        col2.write(f"**Detected State:** {state.title()}")
-        
-        st.caption("Pricing factors in distance, state lines, and specific regional overrides (like Wilmington).")
     else:
-        st.error("Address not found. Please try adding a zip code or checking the address.")
+        st.error("Unable to locate address. Please check spelling or add a Zip Code.")
+
+else:
+    st.write("---")
+    st.info("Enter an address above to generate a professional logistics quote.")
