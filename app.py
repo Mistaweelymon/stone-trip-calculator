@@ -11,30 +11,67 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom CSS for a professional "Stone Industry" Look
+# --- Updated Custom CSS for Visibility ---
 st.markdown("""
     <style>
-    .main {
-        background-color: #f8f9fa;
+    /* Main Background */
+    .stApp {
+        background-color: #f4f7f9;
     }
-    .stMetric {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border-left: 5px solid #2e4053;
-    }
+    
+    /* The Big Hero Quote Card */
     .quote-card {
         background-color: #2e4053;
-        color: white;
-        padding: 25px;
+        color: #f1c40f !important;
+        padding: 30px;
         border-radius: 15px;
         text-align: center;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    
+    /* The Metric Boxes (White Cards) */
+    [data-testid="stMetricValue"] {
+        color: #1c2833 !important; /* Force dark navy text */
+        font-weight: 700 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #566573 !important; /* Force grey label text */
+        font-weight: 600 !important;
+    }
+    div[data-testid="metric-container"] {
+        background-color: #ffffff;
+        border: 1px solid #d5dbdb;
+        padding: 15px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
     </style>
     """, unsafe_allow_html=True)
 
+# ... [keep your existing API and calculation functions the same] ...
+
+# --- Updated Detail Columns (Bottom of Script) ---
+if address_input:
+    # ... after your calculation ...
+    
+    # Big Hero Result
+    st.markdown(f"""
+        <div class="quote-card">
+            <p style="margin:0; font-size: 1.1rem; color: white; opacity: 0.9;">Suggested Trip Charge</p>
+            <h1 style="margin:0; font-size: 3.5rem;">${charge:,.2f}</h1>
+            <p style="margin:0; font-weight: bold; margin-top:10px; color: #abb2b9;">{reason}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Detail Columns with visibility fix
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("One-Way", f"{miles} mi")
+    with col2:
+        st.metric("State", state.title() if state else "N/A")
+    with col3:
+        st.metric("Round Trip", f"{round(miles*2, 1)} mi")
 # Initialize Google Maps Client
 try:
     gmaps = googlemaps.Client(key=st.secrets["GOOGLE_MAPS_KEY"])
